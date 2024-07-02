@@ -83,30 +83,99 @@
 #include <stdio.h>
 
 __global__ 
-void reduce_minmax(float* d_out, const float* const d_in, bool is_min, const size_t size){
-  extern __shared__ float sh_in[];
+void reduce_minmax_kernel(float* d_out, const float* const d_in, bool is_min, const size_t size){
+  extern __shared__ float sdata[];
 
   int mid = threadIdx.x + blockIdx.x * blockDim.x;
   int tid = threadIdx.x;
 
   if (mid < size){
-    sh_in[tid] = d_in[mid];
+    sdata[tid] = d_in[mid];
   }
   __syncthreads();
 
   for (unsigned int s = blockDim.x/2; s > 0; s >>= 1){
-    if (tid < s){
+    if (tid < s && mid+s < size){
       if (is_min){
-        sh_in[tid] = min(sh_in[tid],  sh_in[tid+s]);
+        sdata[tid] = min(sdata[tid],  sdata[tid+s]);
       } else{
-        sh_in[tid] = max(sh_in[tid],  sh_in[tid+s]);
+        sdata[tid] = max(sdata[tid],  sdata[tid+s]);
       }
     }
     __syncthreads();
   }
 
   if (tid == 0){
-    d_out[blockIdx.x] = sh_in[tid];
+    d_out[blockIdx.x] = sdata[tid];
+  }
+
+}
+
+int get_block_num(int n, int d){
+  return (int)ceil((float)n/d);
+}
+
+float reduce_minmax(const float* const h_in, const size_t size, bool is_min){
+  int BLOCK_WIDTH = 1024;
+  int h_out[1];
+
+  float *d_in, *d_out;
+  cudaMalloc((void **)&h_in, sizeof(float)*size);
+  cudaMemcpy(d_in, h_in, sizeof(float)*size, cudaMemcpyHostToDevice);
+
+  dim3 thread_dim(BLOCK_WIDTH);
+  int shared_memory_size = BLOCK_WIDTH;
+  size_t curr_size = size;
+
+  while(curr_size > 1){
+    int block_num = get_block_num(curr_size, BLOCK_WIDTH);
+    dim3 block_dim(block_num);
+    cudaMalloc((void**)&d_out, sizeof(float)*block_num);
+
+    reduce_minmax_kernel<<<block_dim, thread_dim>>>(d_out, d_in, is_min, curr_size);
+    cudaDeviceSynchronize();
+
+    cudaFree(d_in);
+
+    d_in = d_out;
+    curr_size = block_num;
+
+  }
+
+  cudaMemcpy(h_out, d_out, sizeof(float), cudaMemcpyDeviceToHost);
+  return *h_out;
+
+
+}
+
+// bin = (lum[i] - lumMin) / lumRange * numBins
+__global__
+void histogram_kernel(unsigned int *d_out, const float const *d_in, int size_bin, int size_in, float max_logLum, float min_logLum){
+  int mid = threadIdx.x + blockDim.x*blockIdx.x;
+  if (mid >= size_in){
+    return;
+  }
+  float range = max_logLum - min_logLum;
+
+  int bin = (d_in[mid] - min_logLum)/ range* size_bin;
+
+  atomicAdd(&d_out[bin], 1);
+}
+
+__global__
+void scan_kernel(unsigned int *d_bins, int num_bin){
+  int mid = threadIdx.x + blockDim.x*blockIdx.x;
+  if (mid >= num_bin){
+    return;
+  }
+
+  for (int i = 1; i < num_bin; i <<= 1){
+    if (mid >= i){
+      unsigned int temp = d_bins[mid-i];
+      __syncthreads();
+      d_bins[mid] += temp;
+      __syncthreads();
+    }
   }
 
 }
@@ -130,6 +199,19 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
     4) Perform an exclusive scan (prefix sum) on the histogram to get
        the cumulative distribution of luminance values (this should go in the
        incoming d_cdf pointer which already has been allocated for you)       */
+  
+  dim3 thread_dim(1024);
+  dim3 block_dim(get_block_num(numRows*numCols, thread_dim.x));
+
+  min_logLum = reduce_minmax(d_logLuminance, numRows*numCols, true);
+  max_logLum = reduce_minmax(d_logLuminance, numRows*numCols, false);
+  cudaMemset(d_cdf, 0, sizeof(unsigned int)*numBins);
+  histogram_kernel<<<block_dim, thread_dim>>>(d_cdf, d_logLuminance, numBins, numRows*numCols, max_logLum, min_logLum);
+  cudaDeviceSynchronize();
+  scan_kernel<<<block_dim, thread_dim>>>(d_cdf, numBins);
+  cudaDeviceSynchronize();
+
+
 
   
 

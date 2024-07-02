@@ -63,10 +63,13 @@ $$
 
 step为o(logn)，work为o(nlogn)
 
+可以参考[main2.cu](main2.cu)中的scan_kernel。
+
 ### 2.2 blelloch
 ![blelloch](./pic/blelloch.png)
 
 具体步骤太复杂了，意会。step为o(logn)（实际为2logn，比上面算法慢一些）。work为o(n)，比上面快
+
 
 ## 3. histogram
 
@@ -79,6 +82,8 @@ cumulative distribution function 累积分布函数，（比x值小的部分的�
 ### 3.1 atomic
 每来一个元素，判断属于哪个bin，这个bin的值加1（这个加1是原子的atomic，因为并行情况下有多个线程可能同时访问bin的值）
 
+可以参考[main2.cu](main2.cu)中的histogram_kernel。
+
 ### 3.2 局部直方图+reduce
 
 每个线程维护一个局部直方图来处理一部分数据，最后将所有局部直方图的结果相加得到总的直方图（reduce）：（这里一个直方图有3个bin）
@@ -87,3 +92,6 @@ cumulative distribution function 累积分布函数，（比x值小的部分的�
 
 ### 3.3 排序+reduce
 相当于一个键值对，键是bin的序号，值是1。按键排序以后，把键相同的值来reduce，可以得到各键对应的总值。
+
+
+## 注：用tid作为索引，操作shared memory；用mid操作global memory
