@@ -51,4 +51,9 @@ void your_sort(unsigned int* const d_inputVals,
 { 
   //TODO
   //PUT YOUR SORT HERE
+  // 先把val求一下是1还是0，得到pred数组
+  // 扫描pred数组得到在输出中排第几位
+  // 循环多少位？int是32
+  // 得到输出
+  // 直接参考notes/chapter4/main1.cu
 }
