@@ -12,6 +12,8 @@
 
 为什么这里不能是inclusive scan？可以顺序遍历并且记录第一个改变的元素（0不算）？
 
+因为这样计算另一种情况的位置更方便，不用再进行一次compact。如上图，如果是T，保存的位置就是scan\[i\]；如果是F，保存的位置就是i-scan\[i\]
+
 # allocate
 对于每个输入，可能输出的结果数量并不一样，如果每个输入都按最大的输出数量来分配内存并不是很划算。可以根据输入的条件来用扫描的方式确定内存分配情况。
 
@@ -94,6 +96,18 @@ LSB = least significant bit （二进制最低位）
 ![radix_sort1](./pic/radix_sort1.png)
 
 ![radix_sort2](./pic/radix_sort2.png)
+
+可以先完成单block的基数排序，然后根据这个修改得到多block。
+
+所有元素可以在一个block内完成排序，即元素数量\<blockdim的版本，可以参考[main.cu](./main.cu)
+
+多个block版本，参考[main1.cu](./main1.cu)
+
+以上两个例程有需要注意的地方：
+1. exclusive scan的实现方法：在pred数组前面增加Identity element，然后直接inclusive scan。在[main.cu](./main.cu)中有详细说明
+2. __syncthreads()同步操作不要放到核函数的if条件语句当中，因为不是所有线程都能到达这个位置。否则可能导致死锁或同步错位的未定义行为。
+3. 多block的实现重点在与scan的多block。histogram和元素移动是完全并行的，scan可以分段扫描，但每个分段都要加上上一分段最后一个元素的结果，因此这个部分需要是串行的。参考[main1.cu](./main1.cu)
+
 
 # 快速排序 quick sort
 

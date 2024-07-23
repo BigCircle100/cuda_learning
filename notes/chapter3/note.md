@@ -70,6 +70,7 @@ step为o(logn)，work为o(nlogn)
 
 具体步骤太复杂了，意会。step为o(logn)（实际为2logn，比上面算法慢一些）。work为o(n)，比上面快
 
+另外，exclusive scan可以通过inclusive scan得到。可以在pred数组前添加Identity element，然后对这个pred进行inclusive scan，可以得到exclusive scan的结果。具体实现方式可以参考[chapter4_main.cu](../chapter4/main.cu)
 
 ## 3. histogram
 
