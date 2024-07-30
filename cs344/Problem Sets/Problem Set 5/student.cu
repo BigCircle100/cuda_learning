@@ -26,11 +26,11 @@
 
 
 #include "utils.h"
-
+// 用共享内存可以减少同步时间，并且增加coalescing内存访问
 __global__
 void yourHisto(const unsigned int* const vals, //INPUT
                unsigned int* const histo,      //OUPUT
-               int numVals)
+               int numVals, int numBins)
 {
   //TODO fill in this kernel to calculate the histogram
   //as quickly as possible
@@ -38,6 +38,25 @@ void yourHisto(const unsigned int* const vals, //INPUT
   //Although we provide only one kernel skeleton,
   //feel free to use more if it will help you
   //write faster code
+
+  __shared__ unsigned int local_histogram[numBins];
+
+  int tid = threadIdx.x;
+  if (tid < numBins){
+    local_histogram[tid] = 0;
+  }
+  __syncthreads();
+
+  int mid = threadIdx.x + blockDim.x * blockIdx.x;
+  if (mid < numVals){
+    atomicAdd(&local_histogram[vals[mid]], 1);
+  }
+  __syncthreads();
+
+  if (tid < numBins){
+    atomicAdd(&histo[tid], local_histogram[tid]);
+  }
+
 }
 
 void computeHistogram(const unsigned int* const d_vals, //INPUT
@@ -49,6 +68,10 @@ void computeHistogram(const unsigned int* const d_vals, //INPUT
 
   //if you want to use/launch more than one kernel,
   //feel free
+  int block_size = 256;
+  int block_num = ceil((float)numElems/block_size);
+
+  yourHisto<<<block_num, block_size>>>(d_vals, d_histo, numElems, numBins);
 
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 }
