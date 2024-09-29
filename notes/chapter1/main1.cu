@@ -64,7 +64,7 @@ int main(){
 
   int blockWidth = 2;
   dim3 blockSize(blockWidth, blockWidth);
-  dim3 gridSize(k/blockWidth+1, m/blockWidth+1);
+  dim3 gridSize(n/blockWidth+1, m/blockWidth+1);
   matrix_multi_global<<<gridSize, blockSize>>>(d_a, d_b, d_c, m, n, k);
 
   cudaMemcpy(h_c, d_c, sizeof(int)*m*k, cudaMemcpyDeviceToHost);
